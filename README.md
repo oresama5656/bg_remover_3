@@ -63,6 +63,21 @@ python bg_remover.py -i input.png
 python bg_remover.py -i input.png --no-alpha-matting
 ```
 
+### 3. フチ削り（アンチエイリアス）の調整方法
+
+当ツールは**「文字側」**と**「キャラ側」**で別々の高品質なフチ削り処理（Guided Filter + Alpha Mattingのアルファブレンド合成）を行っています。より綺麗に透過したい場合は以下のオプションで削る量を調整してください。
+
+```bash
+# 【文字】の周りの緑のフチを強めに削る（デフォルト: 2）
+python bg_remover.py -i input.png -c auto --color-erode 4
+
+# 【キャラ本体】の周りのフチを強めに削る（デフォルト: 10）
+python bg_remover.py -i input.png -c auto --erode-size 15
+
+# 両方を同時に調整する
+python bg_remover.py -i input.png -c auto --color-erode 4 --erode-size 15
+```
+
 ## 💡 画像生成時のベストプラクティス（生成AI向け）
 
 このツールで綺麗に透過するための、画像生成AI（Midjourney, DALL-E, などのプロンプト）のコツです。
@@ -94,3 +109,31 @@ python bg_remover.py -i input.png --no-alpha-matting
 | `--fg-threshold` | | Alpha matting の前景しきい値。 | `240` |
 | `--bg-threshold` | | Alpha matting の背景しきい値。 | `10` |
 | `--no-fill-holes` | | AIマスク使用時の中抜け防止処理（自動穴埋め）を無効化します。 | `False` |
+
+## 🧩 別のPythonスクリプトへの組み込み
+
+このツールはコマンドラインだけでなく、自作の自動化スクリプトなどからライブラリとして直接呼び出すことができます。
+
+```python
+from pathlib import Path
+from rembg import new_session
+from bg_remover import process_image
+
+# 1. AIモデルの初期化（重いので1回だけ実行）
+session = new_session("isnet-anime")
+
+# 2. 透過処理の実行
+success = process_image(
+    input_path=Path("input.png"),
+    output_path=Path("output.png"),
+    session=session,
+    color_key="auto",       # 背景色自動認識（"white"なども可）
+    color_tolerance=15,     # 色の許容誤差
+    color_erode=2,          # 文字側のフチ削り量
+    alpha_matting=True,     # キャラ本体側の滑らかなフチ削り
+    erode_size=10           # キャラ側のフチ削り量
+)
+
+if success:
+    print("透過成功！")
+```
