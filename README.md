@@ -59,8 +59,8 @@ python bg_remover.py -i ./input_folder -c auto -o ./output_folder
 # 単一画像処理
 python bg_remover.py -i input.png
 
-# 境界線をさらに滑らかにする（Alpha MattingON）
-python bg_remover.py -i input.png --alpha-matting
+# Alpha_matting（キャラのフチ削り）はデフォルトで有効化されています。無効化する場合：
+python bg_remover.py -i input.png --no-alpha-matting
 ```
 
 ## 💡 画像生成時のベストプラクティス（生成AI向け）
@@ -88,9 +88,9 @@ python bg_remover.py -i input.png --alpha-matting
 | `--output` | `-o` | 透過画像の保存先フォルダ。 | `output` |
 | `--color-key` | `-c` | 単色背景透過の色指定（white, black, R,G,B等）。ハイブリッド方式が有効になります。 | `None` |
 | `--color-tolerance` | | `-c` 指定時の許容誤差（0〜255）。値を下げると厳密な色のみ消します。 | `15` |
-| `--color-erode` | | `-c` 指定時の緑のフチ残り（境界）を侵食・削除するサイズ。例: `2` や `3` | `0` |
-| `--alpha-matting` | | Alpha matting処理を有効化し、境界のジャギを軽減します（処理は重くなります）。 | `False` |
-| `--erode-size` | | Alpha matting の侵食サイズ調整。 | `10` |
+| `--color-erode` | | 【文字側のフチ除去】`-c` 指定時の緑のフチ残りを侵食・削除するサイズ。 | `2` |
+| `--no-alpha-matting` | | 【キャラ側のフチ除去無効化】Alpha matting（キャラのフチ削り）を無効化します。 | `False (デフォは有効)` |
+| `--erode-size` | | Alpha matting のキャラ側侵食サイズ調整。 | `10` |
 | `--fg-threshold` | | Alpha matting の前景しきい値。 | `240` |
 | `--bg-threshold` | | Alpha matting の背景しきい値。 | `10` |
 | `--no-fill-holes` | | AIマスク使用時の中抜け防止処理（自動穴埋め）を無効化します。 | `False` |

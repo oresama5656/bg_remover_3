@@ -70,14 +70,23 @@ def parse_args():
     parser.add_argument(
         "--color-erode",
         type=int,
-        default=0,
-        help="【フチ除去】色ベース透過のマスクを削るサイズ。緑のフチ残りを消すのに有効（例: 2 や 3。デフォルト: 0）",
+        default=2,
+        help="【文字側のフチ除去】色指定マスクを削るサイズ。緑のフチ残りを消すのに有効（例: 2 や 3。デフォルト: 2）",
     )
+    # キャラ側のAlpha Mattingはデフォルトで真にするため、無効化オプションを用意
+    parser.add_argument(
+        "--no-alpha-matting",
+        action="store_false",
+        dest="alpha_matting",
+        default=True,
+        help="【キャラ側のフチ除去無効化】Alpha mattingを無効化します（デフォルトでは常に有効）",
+    )
+    # 後方互換性と明示的な指定のため
     parser.add_argument(
         "--alpha-matting",
         action="store_true",
-        default=False,
-        help="alpha matting を有効化（境界をより滑らかに）",
+        dest="alpha_matting",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--erode-size",
@@ -371,15 +380,16 @@ def main():
         print(f"  対象背景色   : {args.color_key}")
         print(f"  許容誤差     : {args.color_tolerance}")
         if args.color_erode > 0:
-            print(f"  フチ除去     : {args.color_erode}")
+            print(f"  文字フチ除去 : {args.color_erode}")
     else:
         print(f"  モード       : AI推論 (isnet-anime)")
-        print(f"  Alpha Matting: {'ON' if args.alpha_matting else 'OFF'}")
-        if args.alpha_matting:
-            print(f"    Erode Size      : {args.erode_size}")
-            print(f"    FG Threshold    : {args.fg_threshold}")
-            print(f"    BG Threshold    : {args.bg_threshold}")
-        print(f"  中抜け防止   : {'ON' if not args.no_fill_holes else 'OFF'}")
+        
+    print(f"  Alpha Matting: {'ON' if args.alpha_matting else 'OFF'}")
+    if args.alpha_matting:
+        print(f"    Erode Size      : {args.erode_size}")
+        print(f"    FG Threshold    : {args.fg_threshold}")
+        print(f"    BG Threshold    : {args.bg_threshold}")
+    print(f"  中抜け防止   : {'ON' if not args.no_fill_holes else 'OFF'}")
 
     print(f"  入力         : {input_path}")
     print(f"  出力先       : {output_dir}")
