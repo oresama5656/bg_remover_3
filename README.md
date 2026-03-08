@@ -1,3 +1,8 @@
+ここは削除して利用する。
+GeminiのGEMを生成するカスタム指示用プロンプトなので普段は使用しない
+
+---
+
 # bg_remover_3 (イラスト特化・高品質背景透過ツール)
 
 AI（rembg / isnet-anime）と画像処理（OpenCV）を組み合わせた、イラスト特化の高品質な背景透過バッチツールです。
@@ -33,14 +38,17 @@ pip install -r requirements.txt
 画像生成AIなどで作成した**「単色背景（白、黒、グリーンバックなど）」**の画像に対して最適です。`-c` または `--color-key` オプションで背景色を指定します。
 
 ```bash
-# 白背景のイラストを透過（白文字以外のキャラ・文字が綺麗に残ります）
+# 背景色を【自動検出】して透過させる場合（最もおすすめ！）
+python bg_remover.py -i input.png -c auto
+
+# 手動で色を指定する場合（白文字以外のキャラ・文字が綺麗に残ります）
 python bg_remover.py -i input.png -c white
 
 # RGB値で直接指定する場合
 python bg_remover.py -i input.png -c 255,255,255
 
-# フォルダ内を一括処理
-python bg_remover.py -i ./input_folder -c white -o ./output_folder
+# フォルダ内を一括処理（背景色は画像ごとに自動検出されます）
+python bg_remover.py -i ./input_folder -c auto -o ./output_folder
 ```
 
 ### 2. AI専用方式（背景が複雑な場合や、キャラだけを抜きたい場合）
@@ -80,6 +88,7 @@ python bg_remover.py -i input.png --alpha-matting
 | `--output` | `-o` | 透過画像の保存先フォルダ。 | `output` |
 | `--color-key` | `-c` | 単色背景透過の色指定（white, black, R,G,B等）。ハイブリッド方式が有効になります。 | `None` |
 | `--color-tolerance` | | `-c` 指定時の許容誤差（0〜255）。値を下げると厳密な色のみ消します。 | `15` |
+| `--color-erode` | | `-c` 指定時の緑のフチ残り（境界）を侵食・削除するサイズ。例: `2` や `3` | `0` |
 | `--alpha-matting` | | Alpha matting処理を有効化し、境界のジャギを軽減します（処理は重くなります）。 | `False` |
 | `--erode-size` | | Alpha matting の侵食サイズ調整。 | `10` |
 | `--fg-threshold` | | Alpha matting の前景しきい値。 | `240` |

@@ -15,16 +15,20 @@ rembg + isnet-anime モデルによるイラスト画像の高品質背景除去
   # パラメータ調整
   python bg_remover.py -i image.png --alpha-matting --erode-size 15 --fg-threshold 230 --bg-threshold 20
 
-  # 単色背景の透過（イラストの文字などが消えてしまう場合）
-  # -c / --color-key オプションで透過したい背景色を指定（white, black, R,G,B）
+  # 手動で色を指定する場合
   python bg_remover.py -i ryoukai.png -c white
   python bg_remover.py -i ryoukai.png -c 255,255,255  # RGB直接指定
+
+  # 【New!】背景色を自動で認識させる場合
+  # -c auto を指定すると、画像の四隅などから背景のRGB値を自動計算して透過します。
+  python bg_remover.py -i testyou.png -c auto
 """
 
 import argparse
 import sys
 from pathlib import Path
 
+import cv2
 import numpy as np
 from PIL import Image
 from rembg import remove, new_session
@@ -53,14 +57,21 @@ def parse_args():
     parser.add_argument(
         "-c", "--color-key",
         default=None,
-        help="単色背景透過の色指定（例: white, black, または 255,255,255）。"
-             "これを指定するとrembgAIではなく色ベースの透過を行います（文字などを残したい場合に使用）。",
+        help="単色背景透過の色指定（例: auto, white, black, または 255,255,255）。"
+             "これを指定すると【AI抽出＋色抽出のハイブリッド方式】で動作します。"
+             "'auto' を指定すると背景色を自動で認識します。",
     )
     parser.add_argument(
         "--color-tolerance",
         type=int,
         default=15,
         help="色ベース透過の際の許容誤差（デフォルト: 15）",
+    )
+    parser.add_argument(
+        "--color-erode",
+        type=int,
+        default=0,
+        help="【フチ除去】色ベース透過のマスクを削るサイズ。緑のフチ残りを消すのに有効（例: 2 や 3。デフォルト: 0）",
     )
     parser.add_argument(
         "--alpha-matting",
@@ -95,9 +106,13 @@ def parse_args():
     return parser.parse_args()
 
 
-def parse_color(color_str: str) -> tuple[int, int, int]:
-    """色文字列をRGBタプルに変換する"""
+def parse_color(color_str: str) -> tuple[int, int, int] | str:
+    """色文字列をRGBタプル、または 'auto' に変換する"""
     color_str = color_str.lower().strip()
+    
+    if color_str == "auto":
+        return "auto"
+
     color_map = {
         "white": (255, 255, 255),
         "black": (0, 0, 0),
@@ -123,27 +138,84 @@ def parse_color(color_str: str) -> tuple[int, int, int]:
     raise ValueError(f"無効な色指定です: {color_str}")
 
 
-def remove_by_color(image: Image.Image, target_color: tuple[int, int, int], tolerance: int = 15) -> Image.Image:
+def process_hybrid(
+    img: Image.Image,
+    session,
+    target_color: tuple[int, int, int] | str,
+    tolerance: int,
+    color_erode: int,
+    alpha_matting: bool,
+    erode_size: int,
+    fg_threshold: int,
+    bg_threshold: int,
+    do_fill_holes: bool
+) -> Image.Image:
     """
-    指定された色（および許容誤差内の色）を透明にする
+    【AIマスク】と【色指定マスク】のハイブリッド合成を行う
     """
-    img = image.convert("RGBA")
-    arr = np.array(img)
+    img_rgba = img.convert("RGBA")
+    img_rgb = np.array(img.convert("RGB"))
+    
+    if target_color == "auto":
+        # 画像のフチ周辺（外周10ピクセル）から、最も多く使われている背景色（最頻値）を自動認識
+        h, w = img_rgb.shape[:2]
+        mask = np.ones((h, w), dtype=bool)
+        if h > 20 and w > 20: # 小さすぎる画像への対策
+            mask[10:h-10, 10:w-10] = False
+        
+        border_pixels = img_rgb[mask]
+        
+        # RGB値を1Dの一意な整数に変換して最頻値を取得 (R*65536 + G*256 + B)
+        pixels_1d = border_pixels[:, 0].astype(np.int64) * 65536 + \
+                    border_pixels[:, 1].astype(np.int64) * 256 + \
+                    border_pixels[:, 2].astype(np.int64)
+                    
+        # np.bincountの長さを防ぐため、np.uniqueを使用するか、外周なら多少遅くてもよいが
+        # bincountは高速なので最大16777215までメモリを少し使うが高速
+        counts = np.bincount(pixels_1d)
+        mode_idx = int(np.argmax(counts))
+        
+        target_color = (mode_idx // 65536, (mode_idx // 256) % 256, mode_idx % 256)
+        # （※コマンドラインに毎回出力するとログが流れるため、自動取得したことを裏で使います）
 
-    r, g, b, a = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2], arr[:, :, 3]
-    tr, tg, tb = target_color
-
-    # 許容誤差範囲内のピクセルを特定
-    mask = (
-        (np.abs(r.astype(int) - tr) <= tolerance) &
-        (np.abs(g.astype(int) - tg) <= tolerance) &
-        (np.abs(b.astype(int) - tb) <= tolerance)
+    # 1. AIマスクの生成
+    ai_result = remove(
+        img_rgba,
+        session=session,
+        alpha_matting=alpha_matting,
+        alpha_matting_foreground_threshold=fg_threshold,
+        alpha_matting_background_threshold=bg_threshold,
+        alpha_matting_erode_structure_size=erode_size,
     )
+    
+    if do_fill_holes:
+        ai_result = fill_holes(ai_result)
+        
+    ai_mask = np.array(ai_result)[:, :, 3]
 
-    # 該当ピクセルのアルファ値を0（透明）にする
-    arr[mask, 3] = 0
-
-    return Image.fromarray(arr)
+    # 2. 色指定マスクの生成
+    lower_bound = np.array([max(0, c - tolerance) for c in target_color], dtype=np.uint8)
+    upper_bound = np.array([min(255, c + tolerance) for c in target_color], dtype=np.uint8)
+    
+    # 指定背景色部分が255になるマスク
+    bg_color_mask = cv2.inRange(img_rgb, lower_bound, upper_bound)
+    
+    # 反転させて、文字やキャラ部分が255になるようにする
+    fg_color_mask = cv2.bitwise_not(bg_color_mask)
+    
+    # フチ除去処理: 色ベースマスク（文字など）の境界を削って緑色の残りを取り除く
+    if color_erode > 0:
+        kernel = np.ones((color_erode, color_erode), np.uint8)
+        fg_color_mask = cv2.erode(fg_color_mask, kernel, iterations=1)
+    
+    # 3. マスクの合成 (Bitwise OR)
+    combined_mask = cv2.bitwise_or(ai_mask, fg_color_mask)
+    
+    # 4. 最終処理
+    final_arr = np.array(img_rgba)
+    final_arr[:, :, 3] = combined_mask
+    
+    return Image.fromarray(final_arr)
 
 
 def fill_holes(image: Image.Image) -> Image.Image:
@@ -182,6 +254,7 @@ def process_image(
     do_fill_holes: bool = True,
     color_key: str | None = None,
     color_tolerance: int = 15,
+    color_erode: int = 0,
 ) -> bool:
     """
     単一画像を処理して背景透過PNGを出力する
@@ -194,9 +267,20 @@ def process_image(
         img = Image.open(input_path).convert("RGBA")
 
         if color_key:
-            # 色指定による透過処理（文字などを消したくない場合）
+            # ハイブリッド方式（AI + 色指定マスク合成）
             target_rgb = parse_color(color_key)
-            result = remove_by_color(img, target_rgb, color_tolerance)
+            result = process_hybrid(
+                img,
+                session=session,
+                target_color=target_rgb,
+                tolerance=color_tolerance,
+                color_erode=color_erode,
+                alpha_matting=alpha_matting,
+                erode_size=erode_size,
+                fg_threshold=fg_threshold,
+                bg_threshold=bg_threshold,
+                do_fill_holes=do_fill_holes
+            )
         else:
             # rembg (AI) による被写体抽出処理
             result = remove(
@@ -208,7 +292,7 @@ def process_image(
                 alpha_matting_erode_structure_size=erode_size,
             )
 
-            # AIセグメンテーション時のみ中抜け防止処理を適用
+            # AIセグメンテーション時の中抜け防止処理を適用
             if do_fill_holes:
                 result = fill_holes(result)
 
@@ -255,13 +339,10 @@ def main():
     # 出力フォルダ作成
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # isnet-anime セッションの初期化（色透過指定があれば不要だが、一旦常に作っておく）
-    if not args.color_key:
-        print("モデルを初期化中（isnet-anime）...")
-        session = new_session("isnet-anime")
-        print("モデル初期化完了！\n")
-    else:
-        session = None
+    # isnet-anime セッションの初期化 (ハイブリッド機能があるので常に初期化する)
+    print("モデルを初期化中（isnet-anime）...")
+    session = new_session("isnet-anime")
+    print("モデル初期化完了！\n")
 
     # 設定表示
     print("=" * 50)
@@ -269,9 +350,11 @@ def main():
     print("=" * 50)
     
     if args.color_key:
-        print(f"  モード       : 色ベース透過 (クロマキー)")
-        print(f"  対象色       : {args.color_key}")
+        print(f"  モード       : ハイブリッド (AI + 色ベース透過)")
+        print(f"  対象背景色   : {args.color_key}")
         print(f"  許容誤差     : {args.color_tolerance}")
+        if args.color_erode > 0:
+            print(f"  フチ除去     : {args.color_erode}")
     else:
         print(f"  モード       : AI推論 (isnet-anime)")
         print(f"  Alpha Matting: {'ON' if args.alpha_matting else 'OFF'}")
@@ -306,6 +389,7 @@ def main():
             do_fill_holes=not args.no_fill_holes,
             color_key=args.color_key,
             color_tolerance=args.color_tolerance,
+            color_erode=args.color_erode,
         )
 
         if ok:
