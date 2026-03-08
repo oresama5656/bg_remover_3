@@ -194,7 +194,7 @@ def process_hybrid(
         alpha_matting=alpha_matting,
         alpha_matting_foreground_threshold=fg_threshold,
         alpha_matting_background_threshold=bg_threshold,
-        alpha_matting_erode_structure_size=erode_size,
+        alpha_matting_erode_size=erode_size,
     )
     
     if do_fill_holes:
@@ -235,6 +235,8 @@ def process_hybrid(
 
     # 3. マスクの合成 (np.maximum を用いたアルファ値の保持)
     # bitwise_or では0か255の2値になってしまうため、ピクセルごとの強い方のアルファ値を採用する
+    # ※ np.maximumを使うことで、文字側（color_mask=255）は絶対に消えず維持され、
+    #    キャラ境界の隙間だけAIの綺麗なグラデーションアルファ(ai_mask)が適用される。
     combined_mask = np.maximum(ai_mask, fg_color_mask)
     
     # 4. 最終処理
@@ -315,7 +317,7 @@ def process_image(
                 alpha_matting=alpha_matting,
                 alpha_matting_foreground_threshold=fg_threshold,
                 alpha_matting_background_threshold=bg_threshold,
-                alpha_matting_erode_structure_size=erode_size,
+                alpha_matting_erode_size=erode_size,
             )
 
             # AIセグメンテーション時の中抜け防止処理を適用
@@ -420,7 +422,7 @@ def main():
         )
 
         if ok:
-            print("✓ 完了")
+            print("[OK] 完了")
             success_count += 1
         else:
             fail_count += 1
