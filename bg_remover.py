@@ -203,13 +203,30 @@ def process_hybrid(
     # 反転させて、文字やキャラ部分が255になるようにする
     fg_color_mask = cv2.bitwise_not(bg_color_mask)
     
-    # フチ除去処理: 色ベースマスク（文字など）の境界を削って緑色の残りを取り除く
+    # フチ除去処理: 色ベースマスク（文字など）の境界を削る
     if color_erode > 0:
         kernel = np.ones((color_erode, color_erode), np.uint8)
         fg_color_mask = cv2.erode(fg_color_mask, kernel, iterations=1)
-    
-    # 3. マスクの合成 (Bitwise OR)
-    combined_mask = cv2.bitwise_or(ai_mask, fg_color_mask)
+        
+        # 削った境界を滑らかにぼかす（ジャギー防止）
+        blur_size = color_erode * 2 + 1
+        fg_color_mask = cv2.GaussianBlur(fg_color_mask, (blur_size, blur_size), 0)
+        
+        # Guided Filter によるエッジの復元と整え（元のRGB画像をガイドにする）
+        try:
+            # ガイド画像はグレースケールまたはカラーだが、cv2.ximgproc.createGuidedFilter は
+            # ガイドとしてcv2.CV_8U または cv2.CV_32Fを要求する。今回は処理しやすいようにグレー化。
+            guide = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY)
+            # ximgproc は opencv-contrib-python が必要
+            guided_filter = cv2.ximgproc.createGuidedFilter(guide=guide, radius=color_erode * 2, eps=100)
+            fg_color_mask = guided_filter.filter(fg_color_mask)
+        except AttributeError:
+            # opencv-contrib-python が入っていない場合のフォールバック（ぼかしのみ）
+            pass
+
+    # 3. マスクの合成 (np.maximum を用いたアルファ値の保持)
+    # bitwise_or では0か255の2値になってしまうため、ピクセルごとの強い方のアルファ値を採用する
+    combined_mask = np.maximum(ai_mask, fg_color_mask)
     
     # 4. 最終処理
     final_arr = np.array(img_rgba)
