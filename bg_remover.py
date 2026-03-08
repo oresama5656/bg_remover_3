@@ -112,6 +112,12 @@ def parse_args():
         default=False,
         help="中抜け防止処理を無効化する",
     )
+    parser.add_argument(
+        "--gpu",
+        action="store_true",
+        default=False,
+        help="【高速化】GPU(CUDA)を使用して処理を行う（※別途 onnxruntime-gpu のインストールが必要）",
+    )
     return parser.parse_args()
 
 
@@ -368,8 +374,14 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # isnet-anime セッションの初期化 (ハイブリッド機能があるので常に初期化する)
-    print("モデルを初期化中（isnet-anime）...")
-    session = new_session("isnet-anime")
+    if args.gpu:
+        print("モデルを初期化中（isnet-anime）... [🚀 GPUモード]")
+        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+    else:
+        print("モデルを初期化中（isnet-anime）... [CPUモード]")
+        providers = ["CPUExecutionProvider"]
+        
+    session = new_session("isnet-anime", providers=providers)
     print("モデル初期化完了！\n")
 
     # 設定表示

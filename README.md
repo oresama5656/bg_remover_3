@@ -31,6 +31,15 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+### ⚡ GPUで爆速化したい場合（NVIDIA GPU搭載PCのみ）
+RTX 2070 SuperなどのNVIDIA製GPUをお持ちの場合、オプションでGPUを有効化することで処理速度が劇的に向上します。
+以下のコマンドでGPU用の追加パッケージをインストールしてください。
+```bash
+pip uninstall -y rembg onnxruntime
+pip install rembg[gpu] onnxruntime-gpu
+```
+実行時に `--gpu` フラグを付けることでGPUが使われます（例: `python bg_remover.py -i input.png -c auto --gpu`）。GPU非搭載のPCに配布する場合は、この追加インストールは不要です（これまで通りCPUで動きます）。
+
 ## 🚀 使い方
 
 ### 1. ハイブリッド方式（推奨: 文字や装飾があるイラスト向け）
@@ -109,6 +118,7 @@ python bg_remover.py -i input.png -c auto --color-erode 4 --erode-size 15
 | `--fg-threshold` | | Alpha matting の前景しきい値。 | `240` |
 | `--bg-threshold` | | Alpha matting の背景しきい値。 | `10` |
 | `--no-fill-holes` | | AIマスク使用時の中抜け防止処理（自動穴埋め）を無効化します。 | `False` |
+| `--gpu` | | 【高速化】GPU(CUDA)を使用して処理を行います。※利用するには `onnxruntime-gpu` のインストールが必要です。 | `False` |
 
 ## 🧩 別のPythonスクリプトへの組み込み
 
