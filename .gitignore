@@ -1,0 +1,25 @@
+# Virtual Environments
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Project output and temporary files
+output/
+__pycache__/
+*.pyc
+*.png
+!fortest.png
+!ryoukai.png
+!before.png
+
+# PyInstaller / Build
+build/
+dist/
+*.spec
+
+# IDEs
+.vscode/
+.idea/
