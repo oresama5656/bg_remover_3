@@ -73,20 +73,21 @@ def parse_args():
         default=2,
         help="【文字側のフチ除去】色指定マスクを削るサイズ。緑のフチ残りを消すのに有効（例: 2 や 3。デフォルト: 2）",
     )
-    # キャラ側のAlpha Mattingはデフォルトで真にするため、無効化オプションを用意
+    # キャラ側のAlpha MattingをデフォルトでTrueに設定
     parser.add_argument(
         "--no-alpha-matting",
         action="store_false",
         dest="alpha_matting",
         default=True,
-        help="【キャラ側のフチ除去無効化】Alpha mattingを無効化します（デフォルトでは常に有効）",
+        help="【キャラ側のフチ除去無効化】Alpha mattingを無効化します（デフォルトでは有効）",
     )
-    # 後方互換性と明示的な指定のため
+    # 明示的な指定用
     parser.add_argument(
         "--alpha-matting",
         action="store_true",
         dest="alpha_matting",
-        help=argparse.SUPPRESS,
+        default=True,
+        help="【キャラ側のフチ除去有効化】Alpha matting（アンチエイリアス）を有効にします（デフォルト）",
     )
     parser.add_argument(
         "--erode-size",
@@ -236,7 +237,8 @@ def process_hybrid(
             guided_filter = cv2.ximgproc.createGuidedFilter(guide=guide, radius=color_erode * 2, eps=100)
             fg_color_mask = guided_filter.filter(fg_color_mask)
         except AttributeError:
-            # opencv-contrib-python が入っていない場合のフォールバック（ぼかしのみ）
+            # opencv-contrib-python が入っていない場合の警告
+            print("  [WARNING] opencv-contrib-python が未インストールのため、エッジ補正（Guided Filter）がスキップされました。")
             pass
 
     # 3. マスクの合成 (np.maximum を用いたアルファ値の保持)
@@ -281,14 +283,14 @@ def process_image(
     input_path: Path,
     output_path: Path,
     session,
-    alpha_matting: bool = False,
+    alpha_matting: bool = True,   # デフォルトを True に変更
     erode_size: int = 10,
     fg_threshold: int = 240,
     bg_threshold: int = 10,
     do_fill_holes: bool = True,
     color_key: str | None = None,
     color_tolerance: int = 15,
-    color_erode: int = 0,
+    color_erode: int = 2,          # デフォルトを 2 に変更
 ) -> bool:
     """
     単一画像を処理して背景透過PNGを出力する
