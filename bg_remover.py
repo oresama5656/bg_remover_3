@@ -419,7 +419,7 @@ def main():
 
     for idx, img_path in enumerate(images, 1):
         output_file = output_dir / f"{img_path.stem}.png"
-        print(f"[{idx}/{len(images)}] {img_path.name} → {output_file.name} ...", end=" ")
+        print(f"[{idx}/{len(images)}] {img_path.name} → {output_file.name} ...", end=" ", flush=True)
 
         ok = process_image(
             input_path=img_path,
@@ -436,7 +436,7 @@ def main():
         )
 
         if ok:
-            print("[OK] 完了")
+            print("[OK] 完了", flush=True)
             success_count += 1
         else:
             fail_count += 1
